@@ -3,7 +3,6 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
-using System.Web;
 using BingMapsRESTService.Common.JSON;
 using System.Runtime.Serialization.Json;
 
@@ -55,61 +54,50 @@ namespace ParseRestResponse
 
                 var fromLocationResponse = MakeRequestWebApi(urlRequest);
 
-                if (locationsResponse.Item2 != "success")
+                if (fromLocationResponse.Item2 != "success")
                 {
-                    Console.WriteLine($"Bing Maps Location Request fail, message: {locationsResponse.Item2}");
+                    Console.WriteLine($"Bing Maps Location Request fail, message: {fromLocationResponse.Item2}");
                     Console.WriteLine("Press any key to exit");
                     Console.ReadKey();
                     return;
                 }
-                var resouresSet = fromLocationResponse.Item1.ResourceSets[0];
-                var locationResource = (Location)resouresSet.Resources[loc];
-
-                var brillLocation = (Location) fromLocationResponse.Item1;
+                var brillResouresSet = fromLocationResponse.Item1.ResourceSets[0];
+                var brillLocation = (Location) brillResouresSet.Resources[0];
                 // Second location
 
                 const string staxStudiosAddress = "926 E McLemore Ave, Memphis, TN 38126";
-
-                place = WebUtility.UrlEncode(brillBuildingAddress);
+                place = WebUtility.UrlEncode(staxStudiosAddress);
 
                 urlRequest = $"{BingRestLocation}Locations/{place}?key={_bingMapsKey}";
 
                 var toLocationResponse = MakeRequestWebApi(urlRequest);
 
-                if (locationsResponse.Item2 != "success")
+                if (toLocationResponse.Item2 != "success")
                 {
-                    Console.WriteLine($"Bing Maps Location Request fail, message: {locationsResponse.Item2}");
+                    Console.WriteLine($"Bing Maps Location Request fail, message: {toLocationResponse.Item2}");
+                    Console.WriteLine("Press any key to exit");
+                    Console.ReadKey();
+                    return;
+                }
+                var staxResouresSet = fromLocationResponse.Item1.ResourceSets[0];
+                var staxLocation = (Location) staxResouresSet.Resources[0];
+
+
+                // Now call the Routes API
+                var routeUrl = $"{BingRestLocation}Routes?wp.0={brillLocation.Point.Coordinates[0]},{brillLocation.Point.Coordinates[1]}" +
+                               $"&wp.1={staxLocation.Point.Coordinates[0]},{staxLocation.Point.Coordinates[1]}&du=mile&key={_bingMapsKey}";
+
+                var routeResponse = MakeRequestWebApi(routeUrl);
+
+                if (routeResponse.Item2 != "success")
+                {
+                    Console.WriteLine($"Bing Maps Route Request fail, message: {routeResponse.Item2}");
                     Console.WriteLine("Press any key to exit");
                     Console.ReadKey();
                     return;
                 }
 
-                var routeUrl = $"{BingRestLocation}Routes?wp.0={fromLocationResponse.Item1.Coordinates.Latitude},{fromLocation.Coordinates.Longitude}&wp.1={toLocation.Coordinates.Latitude},{toLocation.Coordinates.Longitude}&du=mile&key={BingMapsKey}";
-
-                var bingResponse = MakeRequestWebApi(routeUrl);
-
-                if (locationsResponse.Item2 != "success")
-                {
-                    Console.WriteLine($"Bing Maps Location Request fail, message: {locationsResponse.Item2}");
-                }
-                else
-                {
-                    ProcessLocationResponse(locationsResponse.Item1);
-                }
-
-
-                urlRequest = $"{BingRestLocation}/Routes{place}?key={_bingMapsKey}";
-                var routesResponse = MakeRequestWebApi(urlRequest);
-
-                if (routesResponse.Item2 != "success")
-                {
-                    Console.WriteLine($"Bing Maps Route Request fail, message: {locationsResponse.Item2}");
-                }
-                else
-                {
-                    ProcessLocationResponse(locationsResponse.Item1);
-                }
-
+ 
             }
             catch (Exception e)
             {
