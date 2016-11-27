@@ -46,13 +46,16 @@ namespace ParseRestResponse
 
                 // First location
 
-                const string brillBuildingAddress = "1619 Broadway, New York, NY 10019";
+                const string brillBuildingAddress = "McLemore Ave, Memphis, TN";// "1619 Broadway New York NY 10019";
 
                 place = WebUtility.UrlEncode(brillBuildingAddress);
 
                 urlRequest = $"{BingRestLocation}Locations/{place}?key={_bingMapsKey}";
 
                 var fromLocationResponse = MakeRequestWebApi(urlRequest);
+
+                ProcessLocationResponse(fromLocationResponse.Item1);
+
 
                 if (fromLocationResponse.Item2 != "success")
                 {
@@ -63,6 +66,9 @@ namespace ParseRestResponse
                 }
                 var brillResouresSet = fromLocationResponse.Item1.ResourceSets[0];
                 var brillLocation = (Location) brillResouresSet.Resources[0];
+
+                Console.WriteLine($"Brill Building Lat: {brillLocation.GeocodePoints[0].Coordinates[0]}, Long: {brillLocation.GeocodePoints[0].Coordinates[1]}");
+
                 // Second location
 
                 const string staxStudiosAddress = "926 E McLemore Ave, Memphis, TN 38126";
@@ -82,6 +88,7 @@ namespace ParseRestResponse
                 var staxResouresSet = fromLocationResponse.Item1.ResourceSets[0];
                 var staxLocation = (Location) staxResouresSet.Resources[0];
 
+                Console.WriteLine($"Stax Studios Lat: {staxLocation.GeocodePoints[0].Coordinates[0]}, Long: {staxLocation.GeocodePoints[0].Coordinates[1]}");
 
                 // Now call the Routes API
                 var routeUrl = $"{BingRestLocation}Routes?wp.0={brillLocation.Point.Coordinates[0]},{brillLocation.Point.Coordinates[1]}" +
@@ -96,6 +103,8 @@ namespace ParseRestResponse
                     Console.ReadKey();
                     return;
                 }
+
+                Console.WriteLine("Got route");
 
  
             }
@@ -189,59 +198,6 @@ namespace ParseRestResponse
             }
             Console.WriteLine();
         }
-        public static void ProcessGeoCode(Response routesResponse)
-        {
-            // Get first location in the response and then extract the lat and long
-            Console.WriteLine("Getting Lat and Long");
 
-            var resouresSet = routesResponse.ResourceSets[0];
-            var location = (Location) resouresSet.Resources[0];
-
-            Console.WriteLine();
-
-            // Get the Geocode Points for each Location
-            for (var loc = 0; loc < locsCount; loc++)
-            {
-                var locationResource = (Location) resouresSet.Resources[loc];
-                Console.WriteLine("Geocode Points for " + locationResource.Address.FormattedAddress);
-
-                var countGeocodePoints = locationResource.GeocodePoints.Length;
-
-                for (var point = 0; point < countGeocodePoints; point++)
-                {
-                    var pointInfo = locationResource.GeocodePoints[point];
-
-                    Console.WriteLine($"    Point: {pointInfo.Coordinates[0]}, {pointInfo.Coordinates[1]}");
-
-                    Console.Write("    Usages: ");
-                    for (var usage = 0; usage < pointInfo.UsageTypes.Length; usage++)
-                    {
-                        Console.Write($"{pointInfo.UsageTypes[usage]} ");
-                    }
-                    Console.WriteLine("\n\n");
-                }
-            }
-            Console.WriteLine();
-
-
-            // Get all locations that have a Confidence=High
-            Console.WriteLine("Locations that have Confidence=High");
-
-            for (var loc = 0; loc < locsCount; loc++)
-            {
-                var locationResource = (Location)resouresSet.Resources[loc];
-
-                if (locationResource.Confidence == "High")
-                {
-                    Console.WriteLine(locationResource.Address.FormattedAddress);
-                }
-            }
-            Console.WriteLine();
-        }
-
-        public static void ProcessRoutesResponse(Response routesResponse)
-        {
-            
-        }
     }
 }
