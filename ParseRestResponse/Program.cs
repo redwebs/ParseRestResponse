@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -29,6 +30,12 @@ namespace ParseRestResponse
 
                 var place = WebUtility.UrlEncode(locationRequestStr);
 
+                // Bing API Structured URLs: Get the latitude and longitude coordinates based on a set of address values for specific countries
+                // US format:
+                // http://dev.virtualearth.net/REST/v1/Locations/US/adminDistrict/postalCode/locality/addressLine?includeNeighborhood=includeNeighborhood&include=includeValue&maxResults=maxResults&key=BingMapsKey
+                // UK format:
+                // http://dev.virtualearth.net/REST/v1/Locations/UK/postalCode?includeNeighborhood=includeNeighborhood&include=includeValue&maxResults=maxResults&key=BingMapsKey
+
                 var urlRequest = $"{BingRestLocation}Locations/{place}?key={_bingMapsKey}";
 
                 var locationsResponse = MakeRequestWebApi(urlRequest);
@@ -36,63 +43,81 @@ namespace ParseRestResponse
                 if (locationsResponse.Item2 != "success")
                 {
                     Console.WriteLine($"Bing Maps Request fail, message: {locationsResponse.Item2}");
+                    Console.WriteLine("Press any key to exit");
                 }
                 else
                 {
-                    ProcessLocationResponse(locationsResponse.Item1);
+                    ProcessLocationResponse(locationsResponse.Item1, locationRequestStr);
                 }
 
                 // Now find a route, first geocode two locations
 
                 // First location
 
-                const string brillBuildingAddress = "McLemore Ave, Memphis, TN";// "1619 Broadway New York NY 10019";
+                // Unstructured URL: Get the latitude and longitude coordinates based on a set of address values for any country
+                //   In the format:
+                // http://dev.virtualearth.net/REST/v1/Locations?countryRegion=countryRegion&adminDistrict=adminDistrict&locality=locality&postalCode=postalCode&addressLine=addressLine&userLocation=userLocation&userIp=userIp&usermapView=usermapView&includeNeighborhood=includeNeighborhood&maxResults=maxResults&key=BingMapsKey
 
-                place = WebUtility.UrlEncode(brillBuildingAddress);
+                const string brillBuildingAddress = "1619 Broadway New York NY 10019";
 
-                urlRequest = $"{BingRestLocation}Locations/{place}?key={_bingMapsKey}";
+                place = Uri.EscapeDataString(brillBuildingAddress);
+
+                urlRequest = $"{BingRestLocation}Locations?query={place}&key={_bingMapsKey}";
 
                 var fromLocationResponse = MakeRequestWebApi(urlRequest);
 
-                ProcessLocationResponse(fromLocationResponse.Item1);
-
-
                 if (fromLocationResponse.Item2 != "success")
                 {
-                    Console.WriteLine($"Bing Maps Location Request fail, message: {fromLocationResponse.Item2}");
-                    Console.WriteLine("Press any key to exit");
                     Console.ReadKey();
                     return;
                 }
+                ProcessLocationResponse(fromLocationResponse.Item1, brillBuildingAddress);
+
                 var brillResouresSet = fromLocationResponse.Item1.ResourceSets[0];
                 var brillLocation = (Location) brillResouresSet.Resources[0];
-
-                Console.WriteLine($"Brill Building Lat: {brillLocation.GeocodePoints[0].Coordinates[0]}, Long: {brillLocation.GeocodePoints[0].Coordinates[1]}");
 
                 // Second location
 
                 const string staxStudiosAddress = "926 E McLemore Ave, Memphis, TN 38126";
-                place = WebUtility.UrlEncode(staxStudiosAddress);
+                place = Uri.EscapeDataString(staxStudiosAddress);
 
-                urlRequest = $"{BingRestLocation}Locations/{place}?key={_bingMapsKey}";
+                urlRequest = $"{BingRestLocation}Locations?query={place}&key={_bingMapsKey}";
 
                 var toLocationResponse = MakeRequestWebApi(urlRequest);
 
                 if (toLocationResponse.Item2 != "success")
                 {
-                    Console.WriteLine($"Bing Maps Location Request fail, message: {toLocationResponse.Item2}");
-                    Console.WriteLine("Press any key to exit");
                     Console.ReadKey();
                     return;
                 }
-                var staxResouresSet = fromLocationResponse.Item1.ResourceSets[0];
+                ProcessLocationResponse(toLocationResponse.Item1, staxStudiosAddress);
+                var staxResouresSet = toLocationResponse.Item1.ResourceSets[0];
                 var staxLocation = (Location) staxResouresSet.Resources[0];
 
-                Console.WriteLine($"Stax Studios Lat: {staxLocation.GeocodePoints[0].Coordinates[0]}, Long: {staxLocation.GeocodePoints[0].Coordinates[1]}");
+                // Third location
+
+                const string whiskyaGoGoAddress = "8901 W. Sunset Blvd West Hollywood, CA 90069";
+                place = Uri.EscapeDataString(whiskyaGoGoAddress);
+
+                urlRequest = $"{BingRestLocation}Locations?query={place}&key={_bingMapsKey}";
+
+                var endLocationResponse = MakeRequestWebApi(urlRequest);
+
+                if (endLocationResponse.Item2 != "success")
+                {
+                    Console.ReadKey();
+                    return;
+                }
+                ProcessLocationResponse(endLocationResponse.Item1, staxStudiosAddress);
+                var whiskyResouresSet = endLocationResponse.Item1.ResourceSets[0];
+                var whiskyLocation = (Location)whiskyResouresSet.Resources[0];
 
                 // Now call the Routes API
-                var routeUrl = $"{BingRestLocation}Routes?wp.0={brillLocation.Point.Coordinates[0]},{brillLocation.Point.Coordinates[1]}" +
-                               $"&wp.1={staxLocation.Point.Coordinates[0]},{staxLocation.Point.Coordinates[1]}&du=mile&key={_bingMapsKey}";
+
+                var wayPoints = new List<Location> {brillLocation, staxLocation, whiskyLocation};
+
+                var routeUrl =
+                    $"{BingRestLocation}Routes?{MakeWaypointString(wayPoints)}du=mile&key={_bingMapsKey}";
 
                 var routeResponse = MakeRequestWebApi(routeUrl);
 
@@ -103,10 +128,7 @@ namespace ParseRestResponse
                     Console.ReadKey();
                     return;
                 }
-
-                Console.WriteLine("Got route");
-
- 
+                ProcessRouteResponse(routeResponse.Item1);
             }
             catch (Exception e)
             {
@@ -115,6 +137,21 @@ namespace ParseRestResponse
 
             Console.WriteLine("Press any key to exit");
             Console.ReadKey();
+        }
+
+        public static string MakeWaypointString(List<Location> waypoints)
+        {
+            var waypointsSb = new StringBuilder();
+            var waypointCntr = 1;
+
+            foreach (var waypoint in waypoints)
+            {
+                waypointsSb.Append($"wp.{waypointCntr}=");
+                waypointsSb.Append($"{waypoint.Point.Coordinates[0]},");
+                waypointsSb.Append($"{waypoint.Point.Coordinates[1]}&");
+                waypointCntr++;
+            }
+            return waypointsSb.ToString();
         }
 
         /// <summary>
@@ -137,17 +174,23 @@ namespace ParseRestResponse
 
             using (var ms = new MemoryStream(Encoding.Unicode.GetBytes(jsonString)))
             {
-                var deserializer = new DataContractJsonSerializer(typeof(Response));
-                return new Tuple<Response, string>((Response)deserializer.ReadObject(ms), "success");
+                var deserializer = new DataContractJsonSerializer(typeof (Response));
+                return new Tuple<Response, string>((Response) deserializer.ReadObject(ms), "success");
             }
         }
 
-        public static void ProcessLocationResponse(Response locationsResponse)
+        public static void ProcessLocationResponse(Response locationsResponse, string placeName)
         {
             var locsCount = locationsResponse.ResourceSets[0].Resources.Length;
 
+            if (locsCount == 0)
+            {
+                Console.WriteLine($"No resources returned for {placeName}");
+                return;
+            }
+
             // Get all locations in the response and then extract the formatted address for each location
-            Console.WriteLine("Show all formatted addresses");
+            Console.WriteLine($"Show all formatted addresses for {placeName}");
 
             var resouresSet = locationsResponse.ResourceSets[0];
 
@@ -189,7 +232,7 @@ namespace ParseRestResponse
 
             for (var loc = 0; loc < locsCount; loc++)
             {
-                var locationResource = (Location)resouresSet.Resources[loc];
+                var locationResource = (Location) resouresSet.Resources[loc];
 
                 if (locationResource.Confidence == "High")
                 {
@@ -197,6 +240,47 @@ namespace ParseRestResponse
                 }
             }
             Console.WriteLine();
+        }
+        public static void ProcessRouteResponse(Response routeResponse)
+        {
+            var routesCount = routeResponse.ResourceSets[0].Resources.Length;
+
+            if (routesCount == 0)
+            {
+                Console.WriteLine("No resources returned for route request");
+                return;
+            }
+
+            // Get all locations in the response and then extract the formatted address for each location
+            Console.WriteLine($"Show all route legs");
+
+            var routeLeg = (Route)routeResponse.ResourceSets[0].Resources[0];
+
+            var legCount = routeLeg.RouteLegs.Length;
+            Console.WriteLine($"Route has {legCount} legs");
+
+            for (var leg = 0; leg < legCount; leg++)
+            {
+                var itenCount = routeLeg.RouteLegs[leg].ItineraryItems.Length;
+
+                Console.WriteLine($"Leg-{leg + 1} Itenerary Count  = {itenCount} items ");
+
+                for (var iten = 0; iten < itenCount; iten++)
+                {
+                    Console.WriteLine($"Itnenerary-{iten} - {routeLeg.RouteLegs[leg].ItineraryItems[iten].Instruction.Text}");
+                }
+            }
+            Console.WriteLine($"Total Distance = {routeLeg.TravelDistance} {routeLeg.DistanceUnit}");
+
+            var totalSecsInt = (int)routeLeg.TravelDuration;
+            
+            var hours = totalSecsInt / 3600;
+            var mins = (totalSecsInt - (hours * 3600)) / 60;
+            var secs = totalSecsInt - (hours * 3600) - (mins * 60);
+
+            Console.WriteLine($"Total Duration Total Seconds = {routeLeg.TravelDuration} {routeLeg.DurationUnit}");
+            Console.WriteLine($"Total Duration Time = {hours}:{mins}:{secs}");
+
         }
 
     }
