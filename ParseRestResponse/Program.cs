@@ -243,42 +243,53 @@ namespace ParseRestResponse
         }
         public static void ProcessRouteResponse(Response routeResponse)
         {
+            if (routeResponse.ResourceSets.Length == 0)
+            {
+                Console.WriteLine("No Resource Set returned for route request");
+                return;
+            }
+
             var routesCount = routeResponse.ResourceSets[0].Resources.Length;
 
             if (routesCount == 0)
             {
-                Console.WriteLine("No resources returned for route request");
+                Console.WriteLine("No Resources returned in Resource Set for route request");
                 return;
             }
 
-            // Get all locations in the response and then extract the formatted address for each location
-            Console.WriteLine($"Show all route legs");
+            var routeResource = (Route)routeResponse.ResourceSets[0].Resources[0];
 
-            var routeLeg = (Route)routeResponse.ResourceSets[0].Resources[0];
-
-            var legCount = routeLeg.RouteLegs.Length;
+            var legCount = routeResource.RouteLegs.Length;
             Console.WriteLine($"Route has {legCount} legs");
 
             for (var leg = 0; leg < legCount; leg++)
             {
-                var itenCount = routeLeg.RouteLegs[leg].ItineraryItems.Length;
+                var itenCount = routeResource.RouteLegs[leg].ItineraryItems.Length;
 
-                Console.WriteLine($"Leg-{leg + 1} Itenerary Count  = {itenCount} items ");
+                // Warning! A StartLocation is provided only when the waypoint is specified as a landmark or an address. 
+                //     routeResource.RouteLegs[leg].StartLocation.GeocodePoints[0].Coordinates[0]
+                // So use: routeResource.RouteLegs[leg].ActualStart.Coordinates[0]
+
+                Console.WriteLine($"Leg-{leg + 1} Itenerary Count: {itenCount}, " +
+                                  $"Start Lat:{routeResource.RouteLegs[leg].ActualStart.Coordinates[0]}, " +
+                                  $"Start Long:{routeResource.RouteLegs[leg].ActualStart.Coordinates[1]}");
 
                 for (var iten = 0; iten < itenCount; iten++)
                 {
-                    Console.WriteLine($"Itnenerary-{iten} - {routeLeg.RouteLegs[leg].ItineraryItems[iten].Instruction.Text}");
+                    Console.WriteLine($"Itenerary-{iten} - {routeResource.RouteLegs[leg].ItineraryItems[iten].Instruction.Text}");
+                    Console.WriteLine($"   Coordinates: {routeResource.RouteLegs[leg].ItineraryItems[iten].ManeuverPoint.Coordinates[0]}" +
+                                      $"{routeResource.RouteLegs[leg].ItineraryItems[iten].ManeuverPoint.Coordinates[1]}");
                 }
             }
-            Console.WriteLine($"Total Distance = {routeLeg.TravelDistance} {routeLeg.DistanceUnit}");
+            Console.WriteLine($"Total Distance = {routeResource.TravelDistance} {routeResource.DistanceUnit}");
 
-            var totalSecsInt = (int)routeLeg.TravelDuration;
+            var totalSecsInt = (int)routeResource.TravelDuration;
             
             var hours = totalSecsInt / 3600;
             var mins = (totalSecsInt - (hours * 3600)) / 60;
             var secs = totalSecsInt - (hours * 3600) - (mins * 60);
 
-            Console.WriteLine($"Total Duration Total Seconds = {routeLeg.TravelDuration} {routeLeg.DurationUnit}");
+            Console.WriteLine($"Total Duration Total Seconds = {routeResource.TravelDuration} {routeResource.DurationUnit}");
             Console.WriteLine($"Total Duration Time = {hours}:{mins}:{secs}");
 
         }
